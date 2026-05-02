@@ -7,7 +7,7 @@ Suno Receipts is a Manifest V3 Chrome extension that records a local authorship 
 - Watches Suno create/workspace pages for generation and edit intent.
 - Prompts the user to create a new project receipt when a generation starts without an active project.
 - Keeps the in-page extension collapsed during recording and shows a draggable live event log.
-- Captures request-level evidence, UI edit intent, lyric/style/title/model changes, and common song operations such as extend, remaster, cover, persona, voice, instruments, vocals, speed, and section edits.
+- Captures passive Suno network observations, UI edit intent, lyric/style/title/model changes, and common song operations such as extend, remaster, cover, persona, voice, instruments, vocals, speed, and section edits.
 - Stores project receipts locally in Chrome extension storage.
 - Exports CSV files into a `SunoReceipts/` folder under Chrome's configured download directory.
 - Opens a styled receipt timeline that can be saved as PDF through Chrome's print dialog.
@@ -30,3 +30,6 @@ Chrome extensions cannot silently write to `~/Music/SunoReceipts/` or any other 
 - Options: verbosity, prompt behavior, preferred save-location display.
 - Content UI: in-page modal and draggable live log.
 
+## Network Capture Strategy
+
+The extension does not monkey-patch `window.fetch` or `XMLHttpRequest`. It uses UI intent, form state, DOM changes, and passive `PerformanceObserver` resource entries. This avoids becoming part of Suno's request call stack or third-party analytics/captcha failures.

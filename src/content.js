@@ -1,5 +1,4 @@
 (function sunoReceiptsContent() {
-  const BRIDGE_EVENT = "suno-receipts-network-event";
   const ROOT_ID = "suno-receipts-root";
   const CREATE_KEYWORDS = ["generate", "create", "submit", "make song"];
   const EDIT_KEYWORDS = [
@@ -27,8 +26,9 @@
   let inputDebounce = null;
   let lastInputFingerprint = {};
   let lastDomCompletionAt = 0;
+  let contextInvalidated = false;
+  const observedResources = new Set();
 
-  injectNetworkBridge();
   initialize();
 
   async function initialize() {
@@ -40,16 +40,8 @@
     document.addEventListener("click", handleClick, true);
     document.addEventListener("input", handleInput, true);
     document.addEventListener("change", handleInput, true);
-    window.addEventListener("message", handleBridgeMessage);
     observeDom();
-  }
-
-  function injectNetworkBridge() {
-    const script = document.createElement("script");
-    script.src = chrome.runtime.getURL("src/page-bridge.js");
-    script.dataset.eventName = BRIDGE_EVENT;
-    script.onload = () => script.remove();
-    (document.documentElement || document.head || document.body).appendChild(script);
+    observeNetworkResources();
   }
 
   function mountUi() {
@@ -388,18 +380,12 @@
     observer.observe(document.documentElement, { childList: true, subtree: true });
   }
 
-  function handleBridgeMessage(event) {
-    if (event.source !== window || event.data?.source !== BRIDGE_EVENT) return;
-    const networkEvent = event.data.event;
-    const classified = classifyNetworkEvent(networkEvent);
-    if (!classified) return;
-    recordDetectedEvent(classified.event, { promptIfMissing: classified.promptIfMissing });
-  }
-
   async function recordDetectedEvent(event, options = {}) {
+    if (contextInvalidated) return;
     event.timestamp = event.timestamp || new Date().toISOString();
     event.url = event.url || location.href;
     const response = await sendMessage({ type: "events:record", event, options });
+    if (!response?.ok) return;
     if (response.requiresPrompt) {
       pendingPromptEvent = response.event;
       showModal(response.matches || []);
@@ -409,6 +395,40 @@
       activeProject = response.project;
       updateRecordingState();
       appendToastEvent(response.event);
+    }
+  }
+
+  function observeNetworkResources() {
+    const handleEntry = entry => {
+      if (!entry?.name || observedResources.has(entry.name) || !isRelevantSunoResource(entry.name)) return;
+      observedResources.add(entry.name);
+      if (observedResources.size > 600) observedResources.clear();
+
+      const classified = classifyNetworkEvent({
+        transport: entry.initiatorType || "resource",
+        url: entry.name,
+        method: "OBSERVED",
+        status: "observed",
+        body: null,
+        timestamp: new Date(entry.startTime + performance.timeOrigin).toISOString()
+      });
+      if (!classified) return;
+      recordDetectedEvent(classified.event, { promptIfMissing: false });
+    };
+
+    for (const entry of performance.getEntriesByType("resource")) {
+      handleEntry(entry);
+    }
+
+    if ("PerformanceObserver" in window) {
+      try {
+        const observer = new PerformanceObserver(list => {
+          for (const entry of list.getEntries()) handleEntry(entry);
+        });
+        observer.observe({ type: "resource", buffered: true });
+      } catch {
+        // Passive network observation is best-effort only.
+      }
     }
   }
 
@@ -457,7 +477,7 @@
       };
     }
 
-    if (settings?.verbosity === "detailed" && /post|patch|put/i.test(networkEvent.method || "")) {
+    if (settings?.verbosity === "detailed" && (/post|patch|put/i.test(networkEvent.method || "") || networkEvent.status === "observed")) {
       return {
         promptIfMissing: false,
         event: {
@@ -565,7 +585,44 @@
   }
 
   function sendMessage(message) {
-    return chrome.runtime.sendMessage(message);
+    if (contextInvalidated) return Promise.resolve({ ok: false, contextInvalidated: true });
+    try {
+      return chrome.runtime.sendMessage(message).catch(error => {
+        if (isContextInvalidatedError(error)) {
+          contextInvalidated = true;
+          teardownContentScript();
+          return { ok: false, contextInvalidated: true };
+        }
+        return { ok: false, error: error.message || "Extension message failed" };
+      });
+    } catch (error) {
+      if (isContextInvalidatedError(error)) {
+        contextInvalidated = true;
+        teardownContentScript();
+        return Promise.resolve({ ok: false, contextInvalidated: true });
+      }
+      return Promise.resolve({ ok: false, error: error.message || "Extension message failed" });
+    }
+  }
+
+  function teardownContentScript() {
+    document.removeEventListener("click", handleClick, true);
+    document.removeEventListener("input", handleInput, true);
+    document.removeEventListener("change", handleInput, true);
+    document.getElementById(ROOT_ID)?.remove();
+  }
+
+  function isContextInvalidatedError(error) {
+    return /extension context invalidated|context invalidated|extension context/i.test(error?.message || String(error || ""));
+  }
+
+  function isRelevantSunoResource(value) {
+    try {
+      const url = new URL(value, location.href);
+      return /(^|\.)suno\.com$/i.test(url.hostname) || /^studio-api.*\.suno\.com$/i.test(url.hostname);
+    } catch {
+      return false;
+    }
   }
 
   function isCreateContext() {

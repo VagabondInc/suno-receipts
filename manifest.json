@@ -20,11 +20,5 @@
     "default_title": "Suno Receipts",
     "default_popup": "popup/popup.html"
   },
-  "options_page": "options/options.html",
-  "web_accessible_resources": [
-    {
-      "resources": ["src/page-bridge.js"],
-      "matches": ["https://suno.com/*", "https://*.suno.com/*"]
-    }
-  ]
+  "options_page": "options/options.html"
 }
