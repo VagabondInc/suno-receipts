@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Suno Receipts</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Suno Receipts</p>
+          <h1>Project library</h1>
+        </div>
+        <button class="icon-button" id="openOptions" type="button" aria-label="Open settings">⚙</button>
+      </header>
+
+      <section class="status-card" id="statusCard">
+        <div class="pulse" aria-hidden="true"></div>
+        <div>
+          <p class="status-label">Capture status</p>
+          <p class="status-copy" id="statusCopy">Open Suno and create a song to start recording.</p>
+        </div>
+      </section>
+
+      <section class="toolbar" aria-label="Export actions">
+        <button id="exportActiveCsv" class="button primary" type="button">Save Active CSV</button>
+        <button id="refresh" class="button ghost" type="button">Refresh</button>
+      </section>
+
+      <section class="project-list" id="projectList" aria-label="Projects"></section>
+      <section class="empty" id="emptyState" hidden>
+        <h2>No receipts yet</h2>
+        <p>When a Suno generation starts, confirm the prompt in-page and this library will begin filling with timestamped creative decisions.</p>
+      </section>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

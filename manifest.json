@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Suno Receipts",
+  "version": "0.1.0",
+  "description": "Track human creative decisions across Suno projects and export timestamped authorship receipts.",
+  "permissions": ["storage", "downloads", "unlimitedStorage"],
+  "host_permissions": ["https://suno.com/*", "https://*.suno.com/*"],
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://suno.com/*", "https://*.suno.com/*"],
+      "js": ["src/content.js"],
+      "css": ["src/content.css"],
+      "run_at": "document_start"
+    }
+  ],
+  "action": {
+    "default_title": "Suno Receipts",
+    "default_popup": "popup/popup.html"
+  },
+  "options_page": "options/options.html",
+  "web_accessible_resources": [
+    {
+      "resources": ["src/page-bridge.js"],
+      "matches": ["https://suno.com/*", "https://*.suno.com/*"]
+    }
+  ]
+}

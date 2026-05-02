@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Suno Receipts Settings</title>
+    <link rel="stylesheet" href="options.css">
+  </head>
+  <body>
+    <main class="page">
+      <header class="masthead">
+        <p class="eyebrow">Suno Receipts</p>
+        <h1>Capture settings</h1>
+        <p>Tune how much evidence the extension records while keeping all project logs local to Chrome extension storage until export.</p>
+      </header>
+
+      <section class="panel">
+        <div>
+          <h2>Log verbosity</h2>
+          <p>Minimal records major authorship events. Balanced adds UI edit intent. Detailed includes lower-level Suno request observations.</p>
+        </div>
+        <div class="segmented" role="radiogroup" aria-label="Log verbosity">
+          <label><input type="radio" name="verbosity" value="minimal"> Minimal</label>
+          <label><input type="radio" name="verbosity" value="balanced"> Balanced</label>
+          <label><input type="radio" name="verbosity" value="detailed"> Detailed</label>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div>
+          <h2>Project prompt</h2>
+          <p>Ask before creating a project receipt when a generation starts and no active project is attached to the Suno tab.</p>
+        </div>
+        <label class="switch">
+          <input id="autoPrompt" type="checkbox">
+          <span>Prompt on new generation</span>
+        </label>
+      </section>
+
+      <section class="panel">
+        <div>
+          <h2>Storage and exports</h2>
+          <p>Chrome blocks silent writes to arbitrary local folders from extensions. Receipts persist locally in extension storage. CSV export downloads to a <strong>SunoReceipts</strong> folder under the browser download location; the target product default is shown below for a future native helper.</p>
+        </div>
+        <label class="field">
+          <span>Preferred receipt location</span>
+          <input id="preferredSaveLocation" type="text" value="~/Music/SunoReceipts/">
+        </label>
+      </section>
+
+      <section class="panel">
+        <div>
+          <h2>PDF timeline</h2>
+          <p>Use the PDF button in the popup to open a styled timeline. Chrome's print dialog can save that report as a PDF.</p>
+        </div>
+        <button class="button" id="save" type="button">Save Settings</button>
+      </section>
+    </main>
+    <script src="options.js"></script>
+  </body>
+</html>
