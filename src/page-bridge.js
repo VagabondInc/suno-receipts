@@ -1,4 +1,7 @@
 (function pageBridge() {
+  if (window.__sunoReceiptsBridgeInstalled) return;
+  window.__sunoReceiptsBridgeInstalled = true;
+
   const eventName = document.currentScript?.dataset?.eventName || "suno-receipts-network-event";
   const sensitivePattern = /token|auth|cookie|secret|password|credential/i;
 
@@ -51,18 +54,46 @@
         body: parseBody(body),
         timestamp: new Date().toISOString()
       }
-    }, window.location.origin);
+    }, window.location.origin === "null" ? "*" : window.location.origin);
+  }
+
+  function safeEmit(transport, url, method, body, status) {
+    try {
+      emit(transport, url, method, body, status);
+    } catch {
+      // Network observation must never affect Suno's own request lifecycle.
+    }
+  }
+
+  function requestMeta(input, init) {
+    return {
+      url: typeof input === "string" || input instanceof URL ? String(input) : input && input.url,
+      method: init?.method || input?.method || "GET",
+      body: init?.body
+    };
   }
 
   const originalFetch = window.fetch;
-  window.fetch = async function patchedFetch(input, init) {
-    const url = typeof input === "string" ? input : input && input.url;
-    const method = init?.method || input?.method || "GET";
-    const body = init?.body;
-    emit("fetch", url, method, body, "pending");
-    const response = await originalFetch.apply(this, arguments);
-    emit("fetch", response.url || url, method, body, response.status);
-    return response;
+  window.fetch = function patchedFetch(input, init) {
+    const meta = requestMeta(input, init);
+    safeEmit("fetch", meta.url, meta.method, meta.body, "pending");
+
+    let fetchPromise;
+    try {
+      fetchPromise = originalFetch.apply(this, arguments);
+    } catch (error) {
+      safeEmit("fetch", meta.url, meta.method, meta.body, "failed");
+      throw error;
+    }
+
+    if (fetchPromise && typeof fetchPromise.then === "function") {
+      fetchPromise.then(
+        response => safeEmit("fetch", response.url || meta.url, meta.method, meta.body, response.status),
+        () => safeEmit("fetch", meta.url, meta.method, meta.body, "failed")
+      );
+    }
+
+    return fetchPromise;
   };
 
   const originalOpen = XMLHttpRequest.prototype.open;
@@ -73,8 +104,8 @@
   };
   XMLHttpRequest.prototype.send = function patchedSend(body) {
     const meta = this.__srMeta || {};
-    emit("xhr", meta.url, meta.method, body, "pending");
-    this.addEventListener("loadend", () => emit("xhr", meta.url, meta.method, body, this.status));
+    safeEmit("xhr", meta.url, meta.method, body, "pending");
+    this.addEventListener("loadend", () => safeEmit("xhr", meta.url, meta.method, body, this.status));
     return originalSend.apply(this, arguments);
   };
 })();
