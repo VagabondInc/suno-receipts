@@ -11,6 +11,8 @@ Suno Receipts is a Manifest V3 Chrome extension that records a local authorship 
 - Stores project receipts locally in Chrome extension storage.
 - Exports CSV files into a `SunoReceipts/` folder under Chrome's configured download directory.
 - Opens a styled receipt timeline that can be saved as PDF through Chrome's print dialog.
+- Adds a real `chatgpt.com` companion panel that extracts Suno-ready Title, Style, Lyrics, Excluded Styles, Weirdness, and Style Slider values from the active ChatGPT conversation.
+- Inserts accepted ChatGPT-side fields into the live Suno tab through extension messaging and records those insertions in the receipt log.
 
 ## Chrome Filesystem Constraint
 
@@ -29,6 +31,22 @@ Chrome extensions cannot silently write to `~/Music/SunoReceipts/` or any other 
 - Popup: project library, resume active receipt, export CSV, open PDF timeline.
 - Options: verbosity, prompt behavior, preferred save-location display.
 - Content UI: in-page modal and draggable live log.
+- ChatGPT UI: floating Suno Bridge panel on `chatgpt.com` with auto-updated fields and per-field insert buttons.
+
+## ChatGPT Bridge
+
+The ChatGPT bridge uses the real `chatgpt.com` page as a top-level site. It does not iframe ChatGPT and does not replace it with an API clone.
+
+The panel scans the current conversation for structured labels:
+
+- `Title:`
+- `Style:`
+- `Lyrics:`
+- `Excluded Styles:`
+- `Weirdness: 0-100`
+- `Style Slider: 0-100`
+
+The `Guide ChatGPT` button inserts a prompt asking ChatGPT to keep those labels updated in future brainstorming turns. When ChatGPT provides slider values, the panel uses them. If a value is missing, the panel keeps a conservative local fallback so the UI remains usable.
 
 ## Network Capture Strategy
 

@@ -6,6 +6,7 @@ const statusCopy = document.getElementById("statusCopy");
 document.getElementById("refresh").addEventListener("click", render);
 document.getElementById("openOptions").addEventListener("click", () => chrome.runtime.openOptionsPage());
 document.getElementById("exportActiveCsv").addEventListener("click", exportActiveCsv);
+document.getElementById("openWorkspace").addEventListener("click", openWorkspace);
 projectList.addEventListener("click", handleProjectAction);
 
 render();
@@ -30,6 +31,13 @@ async function exportActiveCsv() {
   statusCopy.textContent = response.ok
     ? `Saved ${response.filename}.`
     : response.error || "No active project in this tab.";
+}
+
+async function openWorkspace() {
+  const response = await chrome.runtime.sendMessage({ type: "workspace:open" });
+  statusCopy.textContent = response.ok
+    ? "Opened Suno and ChatGPT workspace windows."
+    : response.error || "Could not open workspace.";
 }
 
 async function handleProjectAction(event) {

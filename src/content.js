@@ -40,8 +40,17 @@
     document.addEventListener("click", handleClick, true);
     document.addEventListener("input", handleInput, true);
     document.addEventListener("change", handleInput, true);
+    chrome.runtime.onMessage.addListener(handleRuntimeMessage);
     observeDom();
     observeNetworkResources();
+  }
+
+  function handleRuntimeMessage(message, sender, sendResponse) {
+    if (message?.type !== "suno:insertField") return false;
+    insertAssistantField(message.field, message.value, message.meta || {})
+      .then(sendResponse)
+      .catch(error => sendResponse({ ok: false, error: error.message || "Insert failed" }));
+    return true;
   }
 
   function mountUi() {
@@ -398,6 +407,37 @@
     }
   }
 
+  async function insertAssistantField(field, value, meta) {
+    const normalizedField = normalizeFieldName(field);
+    const target = findSunoField(normalizedField);
+    if (!target) {
+      return { ok: false, error: `Could not find a visible Suno field for ${field}.` };
+    }
+
+    applyFieldValue(target, value, normalizedField);
+    const fingerprint = collectFingerprint();
+    await recordDetectedEvent({
+      kind: "assistant.inserted",
+      label: `Assistant inserted ${fieldLabel(normalizedField)}`,
+      detail: summarizeValue(value),
+      source: "chatgpt-bridge",
+      fingerprint,
+      payloadSummary: {
+        field: normalizedField,
+        value: summarizeValue(value),
+        source: meta.source || "chatgpt.com"
+      }
+    }, { promptIfMissing: true });
+
+    appendToastEvent({
+      label: `Inserted ${fieldLabel(normalizedField)}`,
+      detail: summarizeValue(value),
+      timestamp: new Date().toISOString()
+    });
+
+    return { ok: true, field: normalizedField };
+  }
+
   function observeNetworkResources() {
     const handleEntry = entry => {
       if (!entry?.name || observedResources.has(entry.name) || !isRelevantSunoResource(entry.name)) return;
@@ -609,6 +649,7 @@
     document.removeEventListener("click", handleClick, true);
     document.removeEventListener("input", handleInput, true);
     document.removeEventListener("change", handleInput, true);
+    chrome.runtime.onMessage.removeListener(handleRuntimeMessage);
     document.getElementById(ROOT_ID)?.remove();
   }
 
@@ -678,6 +719,127 @@
 
   function getFieldValue(element) {
     return (element.value || element.textContent || "").replace(/\s+/g, " ").trim();
+  }
+
+  function findSunoField(field) {
+    if (field === "weirdness" || field === "styleInfluence") {
+      return findRangeControl(field);
+    }
+
+    const labels = fieldLabels(field);
+    const fields = Array.from(document.querySelectorAll("textarea, input:not([type='range']), [contenteditable='true']"))
+      .filter(element => element.offsetParent !== null || element.matches("[contenteditable='true']"));
+
+    const exact = fields.find(element => {
+      const label = getFieldLabel(element).toLowerCase();
+      return labels.some(candidate => label.includes(candidate));
+    });
+    if (exact) return exact;
+
+    if (field === "lyrics") {
+      return fields.find(element => /lyrics|lyric|song text|prompt/i.test(getFieldLabel(element))) || largestTextField(fields);
+    }
+    if (field === "style") {
+      return fields.find(element => /style|genre|tag|vibe/i.test(getFieldLabel(element)));
+    }
+    if (field === "excludedStyles") {
+      return fields.find(element => /exclude|negative|avoid|style/i.test(getFieldLabel(element)));
+    }
+    if (field === "title") {
+      return fields.find(element => /title|name/i.test(getFieldLabel(element)));
+    }
+
+    return null;
+  }
+
+  function findRangeControl(field) {
+    const labels = fieldLabels(field);
+    const ranges = Array.from(document.querySelectorAll("input[type='range'], [role='slider']"))
+      .filter(element => element.offsetParent !== null);
+    return ranges.find(element => {
+      const label = getFieldLabel(element).toLowerCase() || surroundingText(element).toLowerCase();
+      return labels.some(candidate => label.includes(candidate));
+    }) || null;
+  }
+
+  function applyFieldValue(element, value, field) {
+    const stringValue = field === "weirdness" || field === "styleInfluence"
+      ? String(clampNumber(value, 0, 100))
+      : String(value || "");
+
+    element.focus();
+    if (element.matches("[contenteditable='true']")) {
+      element.textContent = stringValue;
+    } else {
+      const prototype = element instanceof HTMLTextAreaElement
+        ? HTMLTextAreaElement.prototype
+        : HTMLInputElement.prototype;
+      const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
+      if (descriptor?.set) descriptor.set.call(element, stringValue);
+      else element.value = stringValue;
+    }
+    element.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: stringValue }));
+    element.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  function largestTextField(fields) {
+    return fields
+      .filter(element => element.tagName === "TEXTAREA" || element.matches("[contenteditable='true']"))
+      .sort((a, b) => getFieldValue(b).length - getFieldValue(a).length || b.getBoundingClientRect().height - a.getBoundingClientRect().height)[0] || null;
+  }
+
+  function surroundingText(element) {
+    return [
+      element.getAttribute("aria-label"),
+      element.getAttribute("title"),
+      element.closest("label")?.textContent,
+      element.parentElement?.textContent,
+      element.closest("section, form, div")?.textContent
+    ].filter(Boolean).join(" ").replace(/\s+/g, " ").slice(0, 240);
+  }
+
+  function fieldLabels(field) {
+    return {
+      title: ["title", "name"],
+      style: ["style", "genre", "tags", "vibe"],
+      lyrics: ["lyrics", "lyric", "song text", "prompt"],
+      excludedStyles: ["excluded", "exclude", "negative", "avoid"],
+      weirdness: ["weirdness", "weird"],
+      styleInfluence: ["style influence", "style slider", "style strength", "style weight"]
+    }[field] || [field.toLowerCase()];
+  }
+
+  function normalizeFieldName(field) {
+    const value = String(field || "").replace(/[-_\s]/g, "").toLowerCase();
+    if (value.includes("excluded")) return "excludedStyles";
+    if (value.includes("weird")) return "weirdness";
+    if (value.includes("styleinfluence") || value.includes("styleslider") || value.includes("stylestrength")) return "styleInfluence";
+    if (value.includes("lyric")) return "lyrics";
+    if (value.includes("style")) return "style";
+    if (value.includes("title")) return "title";
+    return String(field || "");
+  }
+
+  function fieldLabel(field) {
+    return {
+      title: "title",
+      style: "style",
+      lyrics: "lyrics",
+      excludedStyles: "excluded styles",
+      weirdness: "weirdness",
+      styleInfluence: "style influence"
+    }[field] || field;
+  }
+
+  function clampNumber(value, min, max) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return min;
+    return Math.min(max, Math.max(min, Math.round(number)));
+  }
+
+  function summarizeValue(value) {
+    const text = String(value ?? "").replace(/\s+/g, " ").trim();
+    return text.length > 130 ? `${text.slice(0, 127)}...` : text;
   }
 
   function findByLabel(fields, labels) {

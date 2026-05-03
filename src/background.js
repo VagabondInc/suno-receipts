@@ -30,7 +30,10 @@ const EVENT_WEIGHTS = {
   "section.edited": 8,
   "ui.intent": 4,
   "request.observed": 3,
-  "dom.observed": 2
+  "dom.observed": 2,
+  "assistant.fieldUpdated": 6,
+  "assistant.inserted": 9,
+  "assistant.workspaceOpened": 5
 };
 
 chrome.runtime.onInstalled.addListener(async () => {
@@ -88,6 +91,10 @@ async function handleMessage(message, sender) {
       return await recordEvent(tabId, message.event, message.options || {});
     case "state:active":
       return await getActiveState(tabId);
+    case "workspace:open":
+      return await openStudioWorkspace();
+    case "suno:insertField":
+      return await insertFieldIntoSuno(message.field, message.value, message.meta || {});
     default:
       return { ok: false, error: `Unsupported message type: ${message.type}` };
   }
@@ -287,6 +294,70 @@ async function findSimilarProjects(rawFingerprint) {
       updatedAt: project.updatedAt,
       score
     }));
+}
+
+async function openStudioWorkspace() {
+  const screenWidth = 1440;
+  const screenHeight = 920;
+  const leftWidth = Math.floor(screenWidth * 0.52);
+  const rightWidth = screenWidth - leftWidth;
+
+  const sunoWindow = await chrome.windows.create({
+    url: "https://suno.com/create",
+    type: "normal",
+    focused: true,
+    left: 0,
+    top: 0,
+    width: leftWidth,
+    height: screenHeight
+  });
+  const chatWindow = await chrome.windows.create({
+    url: "https://chatgpt.com",
+    type: "normal",
+    focused: true,
+    left: leftWidth,
+    top: 0,
+    width: rightWidth,
+    height: screenHeight
+  });
+
+  return {
+    ok: true,
+    sunoWindowId: sunoWindow.id,
+    chatWindowId: chatWindow.id
+  };
+}
+
+async function insertFieldIntoSuno(field, value, meta) {
+  if (!field || value == null) return { ok: false, error: "Missing field or value" };
+  const tabs = await chrome.tabs.query({ url: ["https://suno.com/*", "https://*.suno.com/*"] });
+  const candidates = tabs
+    .filter(tab => tab.id && !tab.discarded)
+    .sort((a, b) => Number(b.active) - Number(a.active));
+
+  if (!candidates.length) {
+    return { ok: false, error: "Open a Suno tab before inserting." };
+  }
+
+  let lastError = "No Suno tab accepted the field insert.";
+  for (const tab of candidates) {
+    try {
+      const response = await chrome.tabs.sendMessage(tab.id, {
+        type: "suno:insertField",
+        field,
+        value,
+        meta
+      });
+      if (response?.ok) {
+        return { ok: true, tabId: tab.id, field, response };
+      }
+      lastError = response?.error || lastError;
+    } catch (error) {
+      lastError = error.message || lastError;
+    }
+  }
+
+  return { ok: false, error: lastError };
 }
 
 function prepareEvent(projectId, rawEvent = {}) {

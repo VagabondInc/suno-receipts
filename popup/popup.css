@@ -131,6 +131,10 @@ h2 {
   margin: 12px 0;
 }
 
+.toolbar:first-of-type {
+  grid-template-columns: 1fr;
+}
+
 .button {
   border: 1px solid var(--border);
   border-radius: 13px;

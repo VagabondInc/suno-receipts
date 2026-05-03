@@ -3,8 +3,8 @@
   "name": "Suno Receipts",
   "version": "0.1.0",
   "description": "Track human creative decisions across Suno projects and export timestamped authorship receipts.",
-  "permissions": ["storage", "downloads", "unlimitedStorage"],
-  "host_permissions": ["https://suno.com/*", "https://*.suno.com/*"],
+  "permissions": ["storage", "downloads", "tabs", "unlimitedStorage"],
+  "host_permissions": ["https://suno.com/*", "https://*.suno.com/*", "https://chatgpt.com/*"],
   "background": {
     "service_worker": "src/background.js"
   },
@@ -14,6 +14,12 @@
       "js": ["src/content.js"],
       "css": ["src/content.css"],
       "run_at": "document_start"
+    },
+    {
+      "matches": ["https://chatgpt.com/*"],
+      "js": ["src/chatgpt-content.js"],
+      "css": ["src/chatgpt-content.css"],
+      "run_at": "document_idle"
     }
   ],
   "action": {
