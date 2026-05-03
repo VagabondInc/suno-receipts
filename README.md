@@ -37,6 +37,8 @@ Chrome extensions cannot silently write to `~/Music/SunoReceipts/` or any other 
 
 The ChatGPT bridge uses the real `chatgpt.com` page as a top-level site. It does not iframe ChatGPT and does not replace it with an API clone.
 
+Because ChatGPT and Suno remain real top-level Chrome pages, their passkey flows stay browser-native. Do not move those authenticated pages into an Electron WebView unless Electron WebAuthn/passkey support is proven for the target platform and login flow.
+
 The panel scans the current conversation for structured labels:
 
 - `Title:`
